@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注册 | Campus Pulse V5</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@0.563.0/dist/umd/lucide.min.js"></script>
+    <script src="https://unpkg.com/vue@3.5.13/dist/vue.global.prod.js"></script>
+    <style>
+        :root { --accent: #06b6d4; --bg: #030712; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: var(--bg); color: #f1f5f9; font-family: 'Noto Sans SC', sans-serif; overflow-x: hidden; cursor: none; }
+        
+        /* 为页面元素设置自定义光标，但不影响浏览器弹窗 */
+        body *:not(input):not(select):not(textarea):not(button):not([contenteditable="true"]):not(a) {
+            cursor: none !important;
+        }
+        
+        /* 为输入元素保留默认光标 */
+        input,
+        select,
+        textarea,
+        button,
+        [contenteditable="true"] {
+            cursor: auto !important;
+        }
+        
+        /* 为链接和可点击元素设置指针光标 */
+        a,
+        button,
+        .cursor-pointer {
+            cursor: pointer !important;
+        }
+
+        /* 极致光标 */
+        #cursor-dot, #cursor-ring { position: fixed; pointer-events: none; z-index: 2147483647; mix-blend-mode: difference; }
+        #cursor-dot { width: 6px; height: 6px; background: #fff; border-radius: 50%; }
+        #cursor-ring { width: 34px; height: 34px; border: 1.5px solid rgba(255,255,255,0.4); border-radius: 50%; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+
+        .glass-card { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(16px); }
+        .btn-active:active { transform: scale(0.95); }
+
+        /* 选择文本样式 */
+        ::selection {
+            background: rgba(6, 182, 212, 0.3);
+        }
+
+        /* 输入框焦点样式 */
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: 2px solid rgba(6, 182, 212, 0.5);
+            outline-offset: 1px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 自定义光标 -->
+        <div id="cursor-dot"></div>
+        <div id="cursor-ring"></div>
+
+        <!-- 导航栏 -->
+        <nav class="sticky top-0 z-50 bg-[#030712]/80 backdrop-blur-xl border-b border-white/5 px-6">
+            <div class="max-w-6xl mx-auto h-20 flex justify-between items-center">
+                <h1 class="text-3xl font-black italic tracking-tighter">PULSE<span class="text-cyan-400">.</span></h1>
+                
+                <div class="flex items-center gap-6">
+                    <div class="hidden sm:block">
+                        <button 
+                            @click="goToLogin"
+                            class="px-4 py-2 rounded-full bg-transparent text-white text-xs font-bold hover:bg-white/5 transition border border-white/10"
+                        >
+                            已有账号？登录
+                        </button>
+                    </div>
+                    <div class="w-10 h-10 rounded-full border border-white/10 overflow-hidden glass-card flex items-center justify-center">
+                        <i data-lucide="user-plus" size="20" class="text-gray-400"></i>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- 主要内容 -->
+        <main class="max-w-md mx-auto px-6 py-20">
+            <!-- 注册表单卡片 -->
+            <div class="glass-card rounded-2xl p-8">
+                <div class="text-center mb-12">
+                    <h2 class="text-2xl font-bold mb-2">创建账号</h2>
+                    <p class="text-sm text-gray-400">加入校园墙社区，分享你的想法</p>
+                </div>
+
+                <!-- 注册表单 -->
+                <form @submit.prevent="register" class="space-y-6">
+                    <!-- 学号 -->
+                    <div>
+                        <label for="username" class="block text-sm font-medium text-gray-300 mb-2">学号</label>
+                        <input 
+                            type="text" 
+                            id="username" 
+                            v-model="form.username"
+                            required
+                            class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 text-sm"
+                            placeholder="请输入学号"
+                        >
+                        <p v-if="errors.username" class="text-red-400 text-xs mt-1">{{ errors.username }}</p>
+                    </div>
+
+                    <!-- 密码 -->
+                    <div>
+                        <label for="password" class="block text-sm font-medium text-gray-300 mb-2">密码</label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            v-model="form.password"
+                            required
+                            class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 text-sm"
+                            placeholder="请输入密码"
+                        >
+                        <p v-if="errors.password" class="text-red-400 text-xs mt-1">{{ errors.password }}</p>
+                    </div>
+
+                    <!-- 确认密码 -->
+                    <div>
+                        <label for="confirmPassword" class="block text-sm font-medium text-gray-300 mb-2">确认密码</label>
+                        <input 
+                            type="password" 
+                            id="confirmPassword" 
+                            v-model="form.confirmPassword"
+                            required
+                            class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 text-sm"
+                            placeholder="请再次输入密码"
+                        >
+                        <p v-if="errors.confirmPassword" class="text-red-400 text-xs mt-1">{{ errors.confirmPassword }}</p>
+                    </div>
+
+                    <!-- 邮箱 -->
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-300 mb-2">邮箱</label>
+                        <input 
+                            type="email" 
+                            id="email" 
+                            v-model="form.email"
+                            required
+                            class="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 text-sm"
+                            placeholder="请输入邮箱"
+                        >
+                        <p v-if="errors.email" class="text-red-400 text-xs mt-1">{{ errors.email }}</p>
+                    </div>
+
+                    <!-- 注册按钮 -->
+                    <div>
+                        <button 
+                            type="submit" 
+                            :disabled="isLoading"
+                            class="w-full py-3 bg-cyan-500 text-black font-bold rounded-lg hover:bg-cyan-600 transition disabled:opacity-50 disabled:cursor-not-allowed btn-active"
+                        >
+                            <span v-if="isLoading">注册中...</span>
+                            <span v-else>注册</span>
+                        </button>
+                    </div>
+                </form>
+
+                <!-- 登录链接 -->
+                <div class="mt-8 text-center">
+                    <p class="text-sm text-gray-400">
+                        已有账号？
+                        <a @click="goToLogin" class="text-cyan-400 hover:underline cursor-pointer">立即登录</a>
+                    </p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const { createApp, ref, reactive } = Vue;
+
+        createApp({
+            setup() {
+                // 表单数据
+                const form = reactive({
+                    username: '',
+                    password: '',
+                    confirmPassword: '',
+                    email: ''
+                });
+
+                // 错误信息
+                const errors = reactive({});
+
+                // 加载状态
+                const isLoading = ref(false);
+
+                // 表单验证
+                const validateForm = () => {
+                    let isValid = true;
+                    
+                    // 重置错误
+                    Object.keys(errors).forEach(key => delete errors[key]);
+
+                    // 验证学号
+                    if (!form.username.trim()) {
+                        errors.username = '学号不能为空';
+                        isValid = false;
+                    } else if (form.username.length < 8 || form.username.length > 20) {
+                        errors.username = '学号长度应在8-20个字符之间';
+                        isValid = false;
+                    }
+
+                    // 验证密码
+                    if (!form.password) {
+                        errors.password = '密码不能为空';
+                        isValid = false;
+                    } else if (form.password.length < 6) {
+                        errors.password = '密码长度至少为6个字符';
+                        isValid = false;
+                    }
+
+                    // 验证确认密码
+                    if (form.password !== form.confirmPassword) {
+                        errors.confirmPassword = '两次输入的密码不一致';
+                        isValid = false;
+                    }
+
+                    // 验证邮箱
+                    if (!form.email.trim()) {
+                        errors.email = '邮箱不能为空';
+                        isValid = false;
+                    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+                        errors.email = '请输入有效的邮箱地址';
+                        isValid = false;
+                    }
+
+                    return isValid;
+                };
+
+                // 注册函数
+                const register = async () => {
+                    if (!validateForm()) return;
+
+                    isLoading.value = true;
+
+                    try {
+                        // 调用后端注册API
+                        const response = await fetch('http://localhost:3002/api/register', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                username: form.username,
+                                password: form.password,
+                                confirmPassword: form.confirmPassword,
+                                email: form.email
+                            })
+                        });
+
+                        const data = await response.json();
+                        console.log('注册响应:', data);
+
+                        if (data.code === 200) {
+                            console.log('注册成功，准备跳转到登录页面');
+                            // 先关闭alert，然后延迟一小段时间再跳转，确保alert能正常显示
+                            setTimeout(() => {
+                                console.log('执行跳转');
+                                goToLogin();
+                            }, 500);
+                            alert('注册成功！请登录');
+                        } else {
+                            alert(`注册失败: ${data.message}`);
+                        }
+                    } catch (error) {
+                        console.error('注册失败:', error);
+                        alert('注册失败，请稍后重试');
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+
+                // 跳转到登录页面
+                const goToLogin = () => {
+                    window.location.href = 'index.html';
+                };
+
+                return {
+                    form,
+                    errors,
+                    isLoading,
+                    register,
+                    goToLogin
+                };
+            }
+        }).mount('#app');
+
+        // 自定义光标效果
+        document.addEventListener('DOMContentLoaded', function() {
+            lucide.createIcons();
+            
+            const cursorDot = document.getElementById('cursor-dot');
+            const cursorRing = document.getElementById('cursor-ring');
+            
+            // 光标位置状态
+            let mousePos = { x: 0, y: 0 };
+            let cursorPos = { x: 0, y: 0 };
+            
+            // 缓动系数
+            const easeFactor = 0.1;
+            
+            // 鼠标移动事件
+            document.addEventListener('mousemove', function(e) {
+                mousePos.x = e.clientX;
+                mousePos.y = e.clientY;
+            });
+            
+            // 平滑移动光标
+            function animateCursor() {
+                // 计算新位置
+                cursorPos.x += (mousePos.x - cursorPos.x) * easeFactor;
+                cursorPos.y += (mousePos.y - cursorPos.y) * easeFactor;
+                
+                // 更新光标样式
+                cursorDot.style.left = `${cursorPos.x}px`;
+                cursorDot.style.top = `${cursorPos.y}px`;
+                cursorRing.style.left = `${cursorPos.x}px`;
+                cursorRing.style.top = `${cursorPos.y}px`;
+                
+                // 持续动画
+                requestAnimationFrame(animateCursor);
+            }
+            
+            // 启动光标动画
+            animateCursor();
+            
+            // 鼠标按下时的效果
+            document.addEventListener('mousedown', function() {
+                cursorRing.style.transform = 'translate(-50%, -50%) scale(0.6)';
+                cursorRing.style.borderWidth = '2px';
+            });
+            
+            document.addEventListener('mouseup', function() {
+                cursorRing.style.transform = 'translate(-50%, -50%) scale(1)';
+                cursorRing.style.borderWidth = '1.5px';
+            });
+            
+            // 按钮悬停效果
+            const buttons = document.querySelectorAll('button, a, .cursor-pointer');
+            buttons.forEach(button => {
+                button.addEventListener('mouseenter', function() {
+                    cursorRing.style.transform = 'translate(-50%, -50%) scale(1.2)';
+                    cursorRing.style.borderColor = 'rgba(6, 182, 212, 0.8)';
+                    cursorRing.style.backgroundColor = 'rgba(6, 182, 212, 0.1)';
+                });
+                
+                button.addEventListener('mouseleave', function() {
+                    cursorRing.style.transform = 'translate(-50%, -50%) scale(1)';
+                    cursorRing.style.borderColor = 'rgba(255, 255, 255, 0.4)';
+                    cursorRing.style.backgroundColor = 'transparent';
+                });
+            });
+            
+            // 输入框悬停效果
+            const inputs = document.querySelectorAll('input, select, textarea');
+            inputs.forEach(input => {
+                input.addEventListener('mouseenter', function() {
+                    cursorRing.style.transform = 'translate(-50%, -50%) scale(1.1)';
+                    cursorRing.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+                });
+                
+                input.addEventListener('mouseleave', function() {
+                    cursorRing.style.transform = 'translate(-50%, -50%) scale(1)';
+                    cursorRing.style.borderColor = 'rgba(255, 255, 255, 0.4)';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

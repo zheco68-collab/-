@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campus Pulse V5 | Data-Driven</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@0.563.0/dist/umd/lucide.min.js"></script>
+    <script src="https://unpkg.com/vue@3.5.13/dist/vue.global.prod.js"></script>
+    <style>
+        :root { --accent: #06b6d4; --bg: #030712; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: var(--bg); color: #f1f5f9; font-family: 'Noto Sans SC', sans-serif; overflow-x: hidden; cursor: none; }
+        
+        /* 为页面元素设置自定义光标，但不影响浏览器弹窗 */
+        body *:not(input):not(select):not(textarea):not(button):not([contenteditable="true"]):not(a) {
+            cursor: none !important;
+        }
+
+        /* 极致光标 */
+        #cursor-dot, #cursor-ring { position: fixed; pointer-events: none; z-index: 2147483647; mix-blend-mode: difference; }
+        #cursor-dot { width: 6px; height: 6px; background: #fff; border-radius: 50%; }
+        #cursor-ring { width: 34px; height: 34px; border: 1.5px solid rgba(255,255,255,0.4); border-radius: 50%; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); }
+
+        .glass-card { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); backdrop-filter: blur(16px); }
+        .btn-active:active { transform: scale(0.95); }
+
+        /* 状态标识：根据表结构 status 动态展示 */
+        .status-badge { font-size: 10px; padding: 2px 8px; border-radius: 99px; font-weight: bold; text-transform: uppercase; }
+        .status-pending { background: rgba(234, 179, 8, 0.1); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.3); }
+        .status-approved { background: rgba(34, 197, 94, 0.1); color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); }
+
+        /* 简单的入场动画 */
+        .post-enter { animation: slideUp 0.6s cubic-bezier(0.23, 1, 0.32, 1) forwards; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* 选择文本样式 */
+        ::selection {
+            background: rgba(6, 182, 212, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 自定义光标 -->
+        <div id="cursor-dot"></div>
+        <div id="cursor-ring"></div>
+
+        <!-- 导航栏 -->
+        <nav class="sticky top-0 z-50 bg-[#030712]/80 backdrop-blur-xl border-b border-white/5 px-6">
+            <div class="max-w-6xl mx-auto h-20 flex justify-between items-center">
+                <h1 class="text-3xl font-black italic tracking-tighter">PULSE<span class="text-cyan-400">.</span></h1>
+                
+                <div class="flex items-center gap-6">
+                    <!-- 登录/用户信息区域 -->
+                    <div v-if="!isLoggedIn" class="hidden sm:block">
+                        <button 
+                            @click="toggleLoginModal"
+                            class="px-4 py-2 rounded-full bg-cyan-500 text-black text-xs font-bold hover:bg-cyan-600 transition"
+                        >
+                            登录
+                        </button>
+                    </div>
+                    <div v-else class="text-right hidden sm:block">
+                        <p class="text-xs font-bold">{{ userInfo.nickname }}</p>
+                        <div class="flex items-center justify-end gap-2">
+                            <p class="text-[10px] text-gray-500 font-mono">ID: {{ userInfo.id }}</p>
+                            <button 
+                                @click="logout"
+                                class="text-[10px] text-cyan-400 hover:underline"
+                            >
+                                登出
+                            </button>
+                        </div>
+                    </div>
+                    <div 
+                        class="w-10 h-10 rounded-full border border-white/10 overflow-hidden glass-card flex items-center justify-center cursor-pointer hover:border-cyan-500 transition"
+                        @click="showAvatarModal = true"
+                    >
+                        <img v-if="isLoggedIn" :src="userInfo.avatar" alt="avatar" class="w-full h-full object-cover">
+                        <i v-else data-lucide="user" size="20" class="text-gray-400"></i>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- 主要内容 -->
+        <main class="max-w-3xl mx-auto px-6 py-12">
+            <!-- 搜索区域 -->
+            <section class="glass-card rounded-[2.5rem] p-6 mb-8">
+                <div class="relative">
+                    <input 
+                        v-model="searchQuery"
+                        @keyup.enter="handleSearch"
+                        type="text" 
+                        placeholder="搜索校园里的新鲜事..."
+                        class="w-full bg-transparent border border-white/10 rounded-full px-6 py-3 pl-12 focus:outline-none focus:border-cyan-500 transition"
+                    >
+                    <i data-lucide="search" size="18" class="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                    <div class="absolute right-2 top-1/2 transform -translate-y-1/2 flex gap-2">
+                        <button 
+                            @click="toggleShowAll"
+                            :class="['px-3 py-1 rounded-full text-xs font-bold transition', showAll ? 'bg-cyan-500 text-black' : 'border border-white/10 hover:border-cyan-500']"
+                        >
+                            {{ showAll ? '仅显示已审核' : '显示全部' }}
+                        </button>
+                        <button 
+                            @click="handleSearch"
+                            class="px-3 py-1 rounded-full bg-cyan-500 text-black text-xs font-bold transition"
+                        >
+                            搜索
+                        </button>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- 发布帖子区域 -->
+            <section class="glass-card rounded-[2.5rem] p-8 mb-12">
+                <div class="flex gap-4 mb-6">
+                    <textarea 
+                        v-model="postContent" 
+                        class="w-full bg-transparent border-none focus:ring-0 text-xl resize-none h-24"
+                        placeholder="今天在校园里发生了什么？"
+                    ></textarea>
+                </div>
+                
+                <div class="flex flex-wrap gap-2 mb-6" id="image-preview-area">
+                    <!-- 图片预览 -->
+                    <div v-for="(preview, index) in imagePreviews" :key="index" class="relative w-24 h-24 rounded-lg overflow-hidden border border-white/10">
+                        <img :src="preview" alt="preview" class="w-full h-full object-cover">
+                        <button 
+                            @click="removePreviewImage(index)"
+                            class="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/50 flex items-center justify-center hover:bg-black/70 transition"
+                        >
+                            <i data-lucide="x" size="12"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center border-t border-white/5 pt-6">
+                    <div class="flex gap-3">
+                        <input 
+                            type="file" 
+                            id="image-upload" 
+                            accept="image/*" 
+                            multiple 
+                            @change="handleImageUpload" 
+                            class="hidden"
+                        >
+                        <label 
+                            for="image-upload"
+                            class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-white/10 transition cursor-pointer"
+                            title="上传图片"
+                        >
+                            <i data-lucide="image" size="20"></i>
+                        </label>
+                        <button 
+                            @click="toggleAnonymous" 
+                            class="px-4 py-2 rounded-full border border-white/10 text-xs font-bold hover:border-cyan-500 transition flex items-center gap-2"
+                        >
+                            <i :data-lucide="isAnonymous ? 'incognito' : 'user-check'" :size="14" :class="isAnonymous ? 'text-cyan-400' : ''"></i> 
+                            <span :class="isAnonymous ? 'text-cyan-400' : ''">{{ isAnonymous ? '匿名发布' : '实名发布' }}</span>
+                        </button>
+                    </div>
+                    <button @click="publishPost" class="px-8 py-3 bg-cyan-500 text-black font-black rounded-full text-sm btn-active shadow-lg shadow-cyan-500/20">
+                        发射信号
+                    </button>
+                </div>
+            </section>
+
+            <!-- 帖子列表 -->
+            <div id="post-stream" class="space-y-8">
+                <article 
+                    v-for="post in posts" 
+                    :key="post.id" 
+                    class="post-enter glass-card rounded-[2.5rem] overflow-hidden group"
+                >
+                    <div class="p-8">
+                        <div class="flex justify-between items-start mb-6">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full border border-white/10 bg-white/5 flex items-center justify-center overflow-hidden">
+                                    <img :src="post.anonymous ? 'https://api.dicebear.com/7.x/identicon/svg?seed=anon' : post.avatar" alt="avatar" class="w-full h-full object-cover">
+                                </div>
+                                <div>
+                                    <p class="font-bold text-sm text-gray-200">{{ post.anonymous ? '匿名同学' : post.nickname }}</p>
+                                    <p class="text-[10px] text-gray-500 font-mono">{{ post.created_time }}</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <span v-if="post.status === 0" class="status-badge status-pending">审核中</span>
+                                <button @click="reportPost(post.id)" class="p-2 opacity-0 group-hover:opacity-40 hover:opacity-100 transition">
+                                    <i data-lucide="shield-alert" size="16"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <p class="text-xl leading-relaxed mb-6">{{ post.content }}</p>
+                        
+                        <div v-if="post.image_urls.length > 0" class="grid grid-cols-2 gap-2 mb-6 rounded-2xl overflow-hidden">
+                            <img 
+                                v-for="(url, index) in post.image_urls" 
+                                :key="index" 
+                                :src="url" 
+                                class="w-full h-48 object-cover hover:scale-105 transition duration-500 cursor-zoom-in"
+                            >
+                        </div>
+
+                        <div class="flex gap-6 border-t border-white/5 pt-6">
+                <button @click="likePost(post.id)" class="flex items-center gap-2 transition-all active:scale-90" :class="likedPosts.has(post.id.toString()) ? 'text-pink-500' : 'hover:text-pink-500'">
+                    <i :data-lucide="likedPosts.has(post.id.toString()) ? 'heart' : 'heart'" size="18"></i>
+                    <span class="text-sm font-mono">{{ post.like_count }}</span>
+                </button>
+                <button @click="showComments(post.id)" class="flex items-center gap-2 hover:text-cyan-400 transition-all">
+                    <i data-lucide="message-circle" size="18"></i>
+                    <span class="text-sm font-mono">{{ post.comment_count }}</span>
+                </button>
+                            <div class="ml-auto flex items-center gap-2 text-gray-600">
+                                <span class="text-xs font-mono text-cyan-400">{{ post.created_time }}</span>
+                                <i data-lucide="eye" size="14"></i>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            </div>
+        </main>
+
+        <!-- 登录模态框 -->
+        <div v-if="showLoginModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div class="glass-card rounded-[2.5rem] p-8 max-w-md w-full mx-6">
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-black mb-2">欢迎回来</h2>
+                    <p class="text-sm text-gray-400">登录后查看更多校园动态</p>
+                </div>
+                
+                <div class="space-y-6">
+                    <div>
+                        <label class="block text-xs font-bold mb-2 text-gray-300">用户名</label>
+                        <input 
+                            v-model="loginForm.username"
+                            type="text" 
+                            class="w-full bg-transparent border border-white/10 rounded-full px-6 py-3 focus:outline-none focus:border-cyan-500 transition"
+                            placeholder="请输入用户名"
+                        >
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-bold mb-2 text-gray-300">密码</label>
+                        <input 
+                            v-model="loginForm.password"
+                            type="password" 
+                            class="w-full bg-transparent border border-white/10 rounded-full px-6 py-3 focus:outline-none focus:border-cyan-500 transition"
+                            placeholder="请输入密码"
+                        >
+                    </div>
+                    
+                    <button 
+                        @click="handleLogin"
+                        :disabled="loading"
+                        class="w-full bg-cyan-500 text-black font-black rounded-full py-3 btn-active shadow-lg shadow-cyan-500/20 transition disabled:opacity-50"
+                    >
+                        {{ loading ? '登录中...' : '登录' }}
+                    </button>
+                    
+                    <div class="text-center text-xs text-gray-400">
+                        <p>还没有账号？<a href="register.html" class="text-cyan-400 hover:underline">立即注册</a></p>
+                    </div>
+                </div>
+                
+                <button 
+                    @click="toggleLoginModal"
+                    class="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full transition"
+                >
+                    <i data-lucide="x" size="20"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 头像弹窗 -->
+        <div v-if="showAvatarModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div class="glass-card rounded-[2.5rem] p-8 max-w-md w-full mx-6">
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-black mb-2">头像设置</h2>
+                    <p class="text-sm text-gray-400">点击更换您的头像</p>
+                </div>
+                
+                <div class="flex flex-col items-center gap-6">
+                    <!-- 头像预览 -->
+                    <div class="w-40 h-40 rounded-full border-4 border-cyan-500 overflow-hidden">
+                        <img v-if="avatarPreview" :src="avatarPreview" alt="头像预览" class="w-full h-full object-cover">
+                        <img v-else-if="userInfo.avatar" :src="userInfo.avatar" alt="当前头像" class="w-full h-full object-cover">
+                        <div v-else class="w-full h-full bg-gray-700 flex items-center justify-center">
+                            <i data-lucide="user" size="64" class="text-gray-500"></i>
+                        </div>
+                    </div>
+                    
+                    <!-- 上传按钮 -->
+                    <div>
+                        <input 
+                            type="file" 
+                            id="avatar-upload" 
+                            accept="image/*" 
+                            @change="handleAvatarUpload" 
+                            class="hidden"
+                        >
+                        <label 
+                            for="avatar-upload"
+                            class="px-6 py-3 bg-cyan-500 text-black font-bold rounded-full btn-active hover:bg-cyan-600 transition cursor-pointer"
+                        >
+                            选择图片
+                        </label>
+                    </div>
+                    
+                    <!-- 保存按钮 -->
+                    <button 
+                        @click="saveAvatar"
+                        :disabled="!avatarFile"
+                        class="px-6 py-3 bg-cyan-500 text-black font-bold rounded-full btn-active hover:bg-cyan-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        保存头像
+                    </button>
+                </div>
+                
+                <button 
+                    @click="closeAvatarModal"
+                    class="absolute top-4 right-4 w-10 h-10 flex items-center justify-center bg-white/10 border border-white/30 hover:bg-white/20 rounded-full transition shadow-lg"
+                >
+                    <i data-lucide="x" size="20" class="text-white"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 评论模态框 -->
+        <div v-if="showCommentModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div class="glass-card rounded-[2.5rem] p-8 max-w-2xl w-full mx-6 max-h-[80vh] overflow-y-auto">
+                <div class="text-center mb-6">
+                    <h2 class="text-2xl font-black mb-2">评论区</h2>
+                    <p class="text-sm text-gray-400">分享你的想法</p>
+                </div>
+                
+                <!-- 评论输入区 -->
+                <div class="mb-8">
+                    <textarea 
+                        v-model="commentContent"
+                        @keyup.enter.ctrl="submitComment"
+                        class="w-full bg-transparent border border-white/10 rounded-xl px-6 py-4 focus:outline-none focus:border-cyan-500 transition resize-none h-32"
+                        placeholder="写下你的评论..."
+                    ></textarea>
+                    <div class="flex justify-end mt-4">
+                        <button 
+                            @click="submitComment"
+                            :disabled="!commentContent.trim() || !isLoggedIn"
+                            class="px-6 py-2 bg-cyan-500 text-black font-bold rounded-full text-sm btn-active shadow-lg shadow-cyan-500/20 transition disabled:opacity-50"
+                        >
+                            发表评论
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 评论列表 -->
+                <div class="space-y-6">
+                    <div v-if="comments.length === 0" class="text-center py-8 text-gray-400">
+                        <p>还没有评论，快来抢沙发吧！</p>
+                    </div>
+                    <div v-for="comment in comments" :key="comment.id" class="border-b border-white/5 pb-6">
+                        <div class="flex gap-4 mb-3">
+                            <div class="w-10 h-10 rounded-full border border-white/10 overflow-hidden flex-shrink-0">
+                                <img :src="comment.avatar" alt="avatar" class="w-full h-full object-cover">
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex items-center justify-between mb-1">
+                                    <p class="text-sm font-bold">{{ comment.nickname }}</p>
+                                    <p class="text-[10px] text-gray-500 font-mono">{{ comment.created_time }}</p>
+                                </div>
+                                <p class="text-sm leading-relaxed">{{ comment.content }}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <button 
+                    @click="closeCommentModal"
+                    class="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full transition"
+                >
+                    <i data-lucide="x" size="20"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 举报模态框 -->
+        <div v-if="showReportModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div class="glass-card rounded-[2.5rem] p-8 max-w-md w-full mx-6">
+                <div class="text-center mb-6">
+                    <h2 class="text-2xl font-black mb-2">举报</h2>
+                    <p class="text-sm text-gray-400">请填写举报原因</p>
+                </div>
+                
+                <!-- 举报输入区 -->
+                <div class="mb-8">
+                    <textarea 
+                        v-model="reportReason"
+                        @keyup.enter.ctrl="submitReport"
+                        class="w-full bg-transparent border border-white/10 rounded-xl px-6 py-4 focus:outline-none focus:border-cyan-500 transition resize-none h-40"
+                        placeholder="请详细描述举报原因..."
+                    ></textarea>
+                    <div class="flex justify-end mt-4">
+                        <button 
+                            @click="submitReport"
+                            :disabled="!reportReason.trim() || !isLoggedIn"
+                            class="px-6 py-2 bg-cyan-500 text-black font-bold rounded-full text-sm btn-active shadow-lg shadow-cyan-500/20 transition disabled:opacity-50"
+                        >
+                            提交举报
+                        </button>
+                    </div>
+                </div>
+                
+                <button 
+                    @click="closeReportModal"
+                    class="absolute top-4 right-4 p-2 hover:bg-white/10 rounded-full transition"
+                >
+                    <i data-lucide="x" size="20"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+    <script>
+        const { createApp, ref, onMounted, onUnmounted } = Vue;
+
+        // API基础URL
+        const API_BASE_URL = 'http://localhost:3002';
+
+        createApp({
+            setup() {
+                // 响应式数据
+                const postContent = ref('');
+                const isAnonymous = ref(false);
+                const posts = ref([]);
+                const userInfo = ref({
+                    nickname: '未登录同学',
+                    id: '20260129',
+                    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'
+                });
+                const loading = ref(false);
+                const searchQuery = ref('');
+                const showAll = ref(false);
+                const isLoggedIn = ref(false);
+                const showLoginModal = ref(false);
+                const loginForm = ref({
+                    username: '',
+                    password: ''
+                });
+                const likedPosts = ref(new Set()); // 存储用户已点赞的帖子ID
+                // 评论相关数据
+                const showCommentModal = ref(false);
+                const currentPostId = ref(null);
+                const comments = ref([]);
+                const commentContent = ref('');
+                
+                // 举报相关数据
+                const showReportModal = ref(false);
+                const currentReportedPostId = ref(null);
+                const reportReason = ref('');
+                
+                // 头像弹窗相关数据
+                const showAvatarModal = ref(false);
+                const avatarPreview = ref('');
+                const avatarFile = ref(null);
+                
+                // 图片上传相关数据
+                const selectedFiles = ref([]);
+                const imagePreviews = ref([]);
+                const uploadingImages = ref(false);
+
+                // 从后端API获取帖子列表
+                const loadPosts = async () => {
+                    try {
+                        loading.value = true;
+                        
+                        // 构建查询参数
+                        const params = new URLSearchParams();
+                        if (showAll.value) {
+                            params.append('show_all', 'true');
+                        }
+                        if (searchQuery.value.trim()) {
+                            params.append('search', searchQuery.value.trim());
+                        }
+                        
+                        const queryString = params.toString();
+                        const url = `${API_BASE_URL}/api/posts${queryString ? `?${queryString}` : ''}`;
+                        
+                        const response = await fetch(url);
+                        const data = await response.json();
+                        
+                        if (data.code === 200) {
+                            console.log('准备更新帖子数据，当前帖子数量:', posts.value.length);
+                            
+                            // 先清空帖子数据，触发DOM更新
+                            posts.value = [];
+                            
+                            // 使用setTimeout确保DOM更新完成后再设置新数据
+                            setTimeout(async () => {
+                                console.log('DOM更新完成，设置新帖子数据，新帖子数量:', data.data.length);
+                                posts.value = data.data;
+                                
+                                // 如果用户已登录，获取点赞状态
+                                if (isLoggedIn.value) {
+                                    console.log('用户已登录，获取点赞状态');
+                                    await loadLikeStatuses();
+                                }
+                            }, 0);
+                        } else {
+                            console.error('获取帖子失败:', data.message);
+                        }
+                    } catch (error) {
+                        console.error('网络错误:', error);
+                    } finally {
+                        setTimeout(() => {
+                            loading.value = false;
+                        }, 0);
+                    }
+                };
+
+                // 加载帖子点赞状态
+                const loadLikeStatuses = async () => {
+                    try {
+                        const postIds = posts.value.map(post => post.id).join(',');
+                        if (!postIds) return;
+                        
+                        const response = await fetch(`${API_BASE_URL}/api/posts/like/statuses?user_id=${userInfo.value.id}&post_ids=${postIds}`);
+                        const data = await response.json();
+                        
+                        if (data.code === 200) {
+                            // 更新已点赞的帖子
+                            const newLikedPosts = new Set();
+                            Object.entries(data.data).forEach(([postId, liked]) => {
+                                if (liked) {
+                                    newLikedPosts.add(postId);
+                                }
+                            });
+                            likedPosts.value = newLikedPosts;
+                        }
+                    } catch (error) {
+                        console.error('获取点赞状态失败:', error);
+                    }
+                };
+
+                // 处理搜索
+                const handleSearch = () => {
+                    loadPosts();
+                };
+
+                // 切换显示全部帖子
+                const toggleShowAll = () => {
+                    showAll.value = !showAll.value;
+                    loadPosts();
+                };
+
+                // 切换登录模态框
+                const toggleLoginModal = () => {
+                    showLoginModal.value = !showLoginModal.value;
+                    // 重新渲染图标
+                    setTimeout(() => {
+                        lucide.createIcons();
+                    }, 100);
+                };
+
+                // 处理登录
+                const handleLogin = async () => {
+                    if (!loginForm.value.username || !loginForm.value.password) {
+                        alert('请输入用户名和密码');
+                        return;
+                    }
+
+                    loading.value = true;
+
+                    try {
+                        // 调用后端登录API
+                        const response = await fetch(`${API_BASE_URL}/api/login`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                username: loginForm.value.username,
+                                password: loginForm.value.password
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.code === 200) {
+                            // 登录成功
+                            console.log('登录成功，准备处理数据');
+                            
+                            // 1. 先存储登录状态到localStorage
+                            const userInfoData = {
+                                nickname: data.data.nickname,
+                                id: data.data.id,
+                                avatar: data.data.avatar
+                            };
+                            localStorage.setItem('isLoggedIn', 'true');
+                            localStorage.setItem('userInfo', JSON.stringify(userInfoData));
+                            
+                            // 2. 关闭登录模态框
+                            showLoginModal.value = false;
+                            
+                            // 3. 清空登录表单
+                            loginForm.value = {
+                                username: '',
+                                password: ''
+                            };
+                            
+                            // 4. 使用Vue的nextTick确保DOM更新完成后再更新用户状态
+                            console.log('准备等待DOM更新完成');
+                            
+                            // 完全重定向到新页面，避免在当前页面更新状态导致的DOM操作错误
+                            setTimeout(() => {
+                                console.log('执行页面重定向');
+                                // 刷新当前页面，确保所有状态都正确初始化
+                                window.location.reload();
+                            }, 500);
+                            
+                            // 登录成功后可以选择跳转到其他页面，或者保持在当前页面
+                            // 如果需要跳转，可以添加类似以下代码
+                            // setTimeout(() => {
+                            //     window.location.href = 'some-other-page.html';
+                            // }, 500);
+                        } else {
+                            // 登录失败
+                            alert(`登录失败: ${data.message}`);
+                        }
+                    } catch (error) {
+                        console.error('登录失败:', error);
+                        alert('登录失败，请稍后重试。');
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                // 处理登出
+                const logout = () => {
+                    isLoggedIn.value = false;
+                    userInfo.value = {
+                        nickname: '未登录同学',
+                        id: '20260129',
+                        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'
+                    };
+                    
+                    // 清除localStorage中的登录状态
+                    localStorage.removeItem('isLoggedIn');
+                    localStorage.removeItem('userInfo');
+                    
+                    alert('已退出登录');
+                };
+                
+                // 处理头像上传
+                const handleAvatarUpload = (event) => {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    
+                    // 验证文件类型
+                    if (!file.type.startsWith('image/')) {
+                        alert('请选择图片文件');
+                        return;
+                    }
+                    
+                    // 验证文件大小
+                    if (file.size > 2 * 1024 * 1024) { // 2MB
+                        alert('图片大小不能超过2MB');
+                        return;
+                    }
+                    
+                    // 生成预览
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        avatarPreview.value = e.target.result;
+                        avatarFile.value = file;
+                    };
+                    reader.readAsDataURL(file);
+                };
+                
+                // 保存头像
+                const saveAvatar = async () => {
+                    if (!avatarFile.value) return;
+                    
+                    try {
+                        const formData = new FormData();
+                        formData.append('avatar', avatarFile.value);
+                        formData.append('user_id', userInfo.value.id);
+                        
+                        const response = await fetch(`${API_BASE_URL}/api/avatar/upload`, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.code === 200) {
+                            // 更新本地头像
+                            userInfo.value.avatar = data.data.avatar_url;
+                            // 更新localStorage
+                            localStorage.setItem('userInfo', JSON.stringify(userInfo.value));
+                            // 关闭弹窗
+                            closeAvatarModal();
+                            // 刷新页面
+                            window.location.reload();
+                        } else {
+                            alert(`保存失败: ${data.message}`);
+                        }
+                    } catch (error) {
+                        console.error('保存头像失败:', error);
+                        alert('保存失败，请稍后重试');
+                    }
+                };
+                
+                // 关闭头像弹窗
+                const closeAvatarModal = () => {
+                    showAvatarModal.value = false;
+                    avatarPreview.value = '';
+                    avatarFile.value = null;
+                }
+                
+                // 处理图片上传
+                const handleImageUpload = (event) => {
+                    const files = event.target.files;
+                    if (!files || files.length === 0) return;
+                    
+                    // 验证文件数量
+                    if (files.length > 9) {
+                        alert('最多只能上传9张图片');
+                        return;
+                    }
+                    
+                    // 验证文件类型和大小
+                    for (let i = 0; i < files.length; i++) {
+                        const file = files[i];
+                        if (!file.type.startsWith('image/')) {
+                            alert('请选择图片文件');
+                            return;
+                        }
+                        if (file.size > 2 * 1024 * 1024) { // 2MB
+                            alert('图片大小不能超过2MB');
+                            return;
+                        }
+                    }
+                    
+                    // 生成预览
+                    for (let i = 0; i < files.length; i++) {
+                        const file = files[i];
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            imagePreviews.value.push(e.target.result);
+                            selectedFiles.value.push(file);
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                };
+                
+                // 移除预览图片
+                const removePreviewImage = (index) => {
+                    imagePreviews.value.splice(index, 1);
+                    selectedFiles.value.splice(index, 1);
+                };;
+
+                // 切换匿名发布状态
+                const toggleAnonymous = () => {
+                    isAnonymous.value = !isAnonymous.value;
+                    // 重新渲染图标
+                    setTimeout(() => {
+                        lucide.createIcons();
+                    }, 100);
+                };
+
+                // 发布帖子
+                const publishPost = async () => {
+                    // 验证是否登录
+                    if (!isLoggedIn.value) {
+                        toggleLoginModal();
+                        return;
+                    }
+                    
+                    if (!postContent.value.trim()) return;
+                    
+                    try {
+                        let imageUrls = [];
+                        
+                        // 如果有图片需要上传
+                        if (selectedFiles.value.length > 0) {
+                            uploadingImages.value = true;
+                            
+                            // 创建FormData
+                            const formData = new FormData();
+                            formData.append('user_id', userInfo.value.id);
+                            
+                            // 添加图片文件
+                            selectedFiles.value.forEach((file, index) => {
+                                formData.append('images', file);
+                            });
+                            
+                            // 上传图片
+                            const response = await fetch(`${API_BASE_URL}/api/posts/images/upload`, {
+                                method: 'POST',
+                                body: formData
+                            });
+                            
+                            const data = await response.json();
+                            
+                            if (data.code === 200) {
+                                imageUrls = data.data.image_urls;
+                            } else {
+                                alert(`图片上传失败: ${data.message}`);
+                                uploadingImages.value = false;
+                                return;
+                            }
+                        }
+                        
+                        // 调用后端API发布帖子
+                        const postResponse = await fetch(`${API_BASE_URL}/api/posts`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                user_id: userInfo.value.id,
+                                content: postContent.value,
+                                image_urls: imageUrls,
+                                anonymous: isAnonymous.value ? 1 : 0
+                            })
+                        });
+                        
+                        const postData = await postResponse.json();
+                        
+                        if (postData.code === 200) {
+                            // 创建新帖子
+                            const newPost = {
+                                id: postData.data.post_id.toString(),
+                                user_id: userInfo.value.id,
+                                nickname: userInfo.value.nickname,
+                                avatar: userInfo.value.avatar,
+                                content: postContent.value,
+                                image_urls: imageUrls,
+                                anonymous: isAnonymous.value ? 1 : 0,
+                                status: 0, // 待审核
+                                like_count: 0,
+                                comment_count: 0,
+                                view_count: 0,
+                                created_time: new Date().toLocaleString('zh-CN', {
+                                    year: 'numeric',
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    second: '2-digit'
+                                }).replace(/\//g, '-')
+                            };
+                            
+                            // 添加到帖子列表开头
+                            posts.value.unshift(newPost);
+                            
+                            // 清空发布框
+                            postContent.value = '';
+                            isAnonymous.value = false;
+                            selectedFiles.value = [];
+                            imagePreviews.value = [];
+                            
+                            // 重新渲染图标
+                            setTimeout(() => {
+                                lucide.createIcons();
+                            }, 100);
+                            
+                            // 提示发布成功
+                            alert('发布成功，等待审核！');
+                        } else {
+                            alert(`发布失败: ${postData.message}`);
+                        }
+                    } catch (error) {
+                        console.error('发布帖子失败:', error);
+                        alert('发布失败，请稍后重试');
+                    } finally {
+                        uploadingImages.value = false;
+                    }
+                };
+
+                // 举报帖子
+                const reportPost = (postId) => {
+                    // 验证是否登录
+                    if (!isLoggedIn.value) {
+                        toggleLoginModal();
+                        return;
+                    }
+                    
+                    currentReportedPostId.value = postId;
+                    reportReason.value = '';
+                    showReportModal.value = true;
+                    
+                    // 重新渲染图标
+                    setTimeout(() => {
+                        lucide.createIcons();
+                    }, 100);
+                };
+                
+                // 关闭举报模态框
+                const closeReportModal = () => {
+                    showReportModal.value = false;
+                    currentReportedPostId.value = null;
+                    reportReason.value = '';
+                };
+                
+                // 提交举报
+                const submitReport = async () => {
+                    if (!reportReason.value.trim()) return;
+                    
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/api/posts/${currentReportedPostId.value}/report`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ 
+                                reason: reportReason.value, 
+                                user_id: userInfo.value.id 
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        if (data.code === 200) {
+                            closeReportModal();
+                            alert("已收到举报，管理人员将尽快处理。");
+                        } else {
+                            alert(`举报失败: ${data.message}`);
+                        }
+                    } catch (error) {
+                        console.error('举报失败:', error);
+                        alert("举报失败，请稍后重试。");
+                    }
+                };
+
+                // 光标效果
+                let dot, ring;
+                let m = { x: -100, y: -100 };
+                let dp = { x: 0, y: 0 };
+                let rp = { x: 0, y: 0 };
+                let animationFrameId;
+
+                const initCursor = () => {
+                    dot = document.getElementById('cursor-dot');
+                    ring = document.getElementById('cursor-ring');
+                    
+                    document.addEventListener('mousemove', (e) => {
+                        m.x = e.clientX;
+                        m.y = e.clientY;
+                    });
+                    
+                    const move = () => {
+                        dp.x += (m.x - dp.x) * 0.3;
+                        dp.y += (m.y - dp.y) * 0.3;
+                        rp.x += (m.x - rp.x) * 0.15;
+                        rp.y += (m.y - rp.y) * 0.15;
+                        
+                        if (dot) {
+                            dot.style.transform = `translate(${dp.x - 3}px, ${dp.y - 3}px)`;
+                        }
+                        if (ring) {
+                            ring.style.transform = `translate(${rp.x - 17}px, ${rp.y - 17}px)`;
+                        }
+                        
+                        animationFrameId = requestAnimationFrame(move);
+                    };
+                    
+                    move();
+                    
+                    // 初始化卡片交互
+                    initCardInteractions();
+                };
+
+                // 初始化卡片交互
+                const initCardInteractions = () => {
+                    setTimeout(() => {
+                        document.querySelectorAll('.glass-card, button, textarea').forEach(el => {
+                            el.onmouseenter = () => {
+                                if (ring) {
+                                    ring.style.transform += ' scale(2.5)';
+                                }
+                            };
+                            el.onmouseleave = () => {
+                                if (ring) {
+                                    ring.style.transform = ring.style.transform.replace(' scale(2.5)', '');
+                                }
+                            };
+                        });
+                    }, 100);
+                };
+
+                // 点赞/取消点赞功能
+                const likePost = async (postId) => {
+                    // 验证是否登录
+                    if (!isLoggedIn.value) {
+                        toggleLoginModal();
+                        return;
+                    }
+                    
+                    try {
+                        // 调用后端点赞API
+                        const response = await fetch(`${API_BASE_URL}/api/posts/${postId}/like`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ user_id: userInfo.value.id })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.code === 200) {
+                            // 找到帖子并更新点赞数
+                            const post = posts.value.find(p => p.id == postId);
+                            if (post) {
+                                post.like_count = data.data.like_count;
+                                // 更新已点赞状态
+                                if (data.data.liked) {
+                                    likedPosts.value.add(postId.toString());
+                                    // 点赞成功，不显示提示
+                                    console.log('点赞成功');
+                                } else {
+                                    likedPosts.value.delete(postId.toString());
+                                    // 取消点赞成功，不显示提示
+                                    console.log('取消点赞成功');
+                                }
+                            }
+                        } else {
+                            // 临时显示系统光标
+                            document.body.style.cursor = 'auto';
+                            // 显示提示
+                            alert(`操作失败: ${data.message}`);
+                            // 恢复自定义光标
+                            document.body.style.cursor = 'none';
+                        }
+                    } catch (error) {
+                        console.error('操作失败:', error);
+                        // 临时显示系统光标
+                        document.body.style.cursor = 'auto';
+                        // 显示提示
+                        alert('操作失败，请稍后重试。');
+                        // 恢复自定义光标
+                        document.body.style.cursor = 'none';
+                    }
+                };
+
+                // 显示评论模态框
+                const showComments = async (postId) => {
+                    // 验证是否登录
+                    if (!isLoggedIn.value) {
+                        toggleLoginModal();
+                        return;
+                    }
+                    
+                    currentPostId.value = postId;
+                    showCommentModal.value = true;
+                    commentContent.value = '';
+                    
+                    // 加载评论
+                    await loadComments(postId);
+                    
+                    // 重新渲染图标
+                    setTimeout(() => {
+                        lucide.createIcons();
+                    }, 100);
+                };
+
+                // 关闭评论模态框
+                const closeCommentModal = () => {
+                    showCommentModal.value = false;
+                    currentPostId.value = null;
+                    comments.value = [];
+                    commentContent.value = '';
+                };
+
+                // 加载评论
+                const loadComments = async (postId) => {
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/api/posts/${postId}/comments`);
+                        const data = await response.json();
+                        
+                        if (data.code === 200) {
+                            comments.value = data.data;
+                        } else {
+                            console.error('获取评论失败:', data.message);
+                            comments.value = [];
+                        }
+                    } catch (error) {
+                        console.error('网络错误:', error);
+                        comments.value = [];
+                    }
+                };
+
+                // 发表评论
+                const submitComment = async () => {
+                    if (!commentContent.value.trim()) return;
+                    
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/api/posts/${currentPostId.value}/comments`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                user_id: userInfo.value.id,
+                                content: commentContent.value,
+                                anonymous: 0
+                            })
+                        });
+                        
+                        console.log('Response status:', response.status);
+                        console.log('Response headers:', response.headers);
+                        
+                        const data = await response.json();
+                        console.log('Response data:', data);
+                        
+                        if (data.code === 200) {
+                            // 重新加载评论
+                            await loadComments(currentPostId.value);
+                            // 清空评论内容
+                            commentContent.value = '';
+                            // 更新帖子评论数
+                            const post = posts.value.find(p => p.id == currentPostId.value);
+                            if (post) {
+                                post.comment_count++;
+                            }
+                            // 评论发表成功，不显示提示
+                            console.log('评论发表成功');
+                        } else {
+                            alert(`评论失败: ${data.message}`);
+                        }
+                    } catch (error) {
+                        console.error('评论失败:', error);
+                        alert('评论失败，请稍后重试。');
+                    }
+                };
+
+                // 生命周期钩子
+                onMounted(async () => {
+                    // 从localStorage恢复登录状态
+                    const savedIsLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+                    const savedUserInfo = localStorage.getItem('userInfo');
+                    
+                    if (savedIsLoggedIn && savedUserInfo) {
+                        try {
+                            isLoggedIn.value = true;
+                            userInfo.value = JSON.parse(savedUserInfo);
+                        } catch (error) {
+                            console.error('恢复登录状态失败:', error);
+                            // 清除错误的存储数据
+                            localStorage.removeItem('isLoggedIn');
+                            localStorage.removeItem('userInfo');
+                        }
+                    }
+                    
+                    // 加载帖子数据
+                    await loadPosts();
+                    
+                    // 初始化光标
+                    initCursor();
+                    
+                    // 初始化图标
+                    setTimeout(() => {
+                        lucide.createIcons();
+                    }, 100);
+                });
+
+                onUnmounted(() => {
+                    // 清理动画帧
+                    if (animationFrameId) {
+                        cancelAnimationFrame(animationFrameId);
+                    }
+                });
+
+                return {
+                    postContent,
+                    isAnonymous,
+                    posts,
+                    userInfo,
+                    loading,
+                    searchQuery,
+                    showAll,
+                    isLoggedIn,
+                    showLoginModal,
+                    loginForm,
+                    likedPosts,
+                    showCommentModal,
+                    currentPostId,
+                    comments,
+                    commentContent,
+                    showAvatarModal,
+                    avatarPreview,
+                    avatarFile,
+                    selectedFiles,
+                    imagePreviews,
+                    uploadingImages,
+                    showReportModal,
+                    currentReportedPostId,
+                    reportReason,
+                    toggleAnonymous,
+                    publishPost,
+                    reportPost,
+                    handleSearch,
+                    toggleShowAll,
+                    toggleLoginModal,
+                    handleLogin,
+                    logout,
+                    likePost,
+                    showComments,
+                    closeCommentModal,
+                    submitComment,
+                    handleAvatarUpload,
+                    saveAvatar,
+                    closeAvatarModal,
+                    handleImageUpload,
+                    removePreviewImage,
+                    closeReportModal,
+                    submitReport
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
