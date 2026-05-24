@@ -82,8 +82,8 @@ pip install DrissionPage
 
 使用文本编辑器打开 Python 脚本，找到代码中的 dp.get(...) 这一行。将括号内的 URL 替换为您想要爬取的小红书笔记链接。
 
-# 替换为您需要抓取的笔记链接
-dp.get('[https://www.xiaohongshu.com/explore/您的笔记ID](https://www.xiaohongshu.com/explore/您的笔记ID)')
+# 替换为你需要抓取的笔记链接
+dp.get('[https://www.xiaohongshu.com/explore/您的笔记ID](https://www.xiaohongshu.com/explore/你的笔记ID)')
 
 
 2. 运行脚本
